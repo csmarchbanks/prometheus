@@ -1,13 +1,12 @@
 import React, { FC, Fragment } from 'react';
 import { RouteComponentProps } from '@reach/router';
 import { Table, Alert } from 'reactstrap';
-import useFetches from '../hooks/useFetches';
+import { useFetch } from '../utils/useFetch';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 import PathPrefixProps from '../PathPrefixProps';
 
-const ENDPOINTS = ['/api/v1/status/runtimeinfo', '/api/v1/status/buildinfo', '/api/v1/alertmanagers'];
 const sectionTitles = ['Runtime Information', 'Build Information', 'Alertmanagers'];
 
 interface StatusConfig {
@@ -55,26 +54,22 @@ export const statusConfig: StatusConfig = {
   droppedAlertmanagers: { skip: true },
 };
 
-const endpointsMemo: { [prefix: string]: string[] } = {};
-
 const Status: FC<RouteComponentProps & PathPrefixProps> = ({ pathPrefix = '' }) => {
-  if (!endpointsMemo[pathPrefix]) {
-    // TODO: Come up with a nicer solution for this?
-    //
-    // The problem is that there's an infinite reload loop if the endpoints array is
-    // reconstructed on every render, as the dependency checking in useFetches()
-    // then thinks that something has changed... the whole useFetches() should
-    // probably removed and solved differently (within the component?) somehow.
-    endpointsMemo[pathPrefix] = ENDPOINTS.map(ep => `${pathPrefix}${ep}`);
-  }
-  const { response: data, error, isLoading } = useFetches<StatusPageState[]>(endpointsMemo[pathPrefix]);
+  const {response: runtimeRes, error: runtimeError} = useFetch(`${pathPrefix}/api/v1/status/runtimeinfo`);
+  const {response: buildRes, error: buildError} = useFetch(`${pathPrefix}/api/v1/status/buildinfo`);
+  const {response: alertmanagersRes, error: alertmanagersError} = useFetch(`${pathPrefix}/api/v1/alertmanagers`);
+
+  const error = runtimeError || buildError || alertmanagersError;
   if (error) {
     return (
       <Alert color="danger">
         <strong>Error:</strong> Error fetching status: {error.message}
       </Alert>
     );
-  } else if (isLoading) {
+  } 
+  
+  const isLoading = !runtimeRes || !buildRes || !alertmanagersRes;
+  if (isLoading) {
     return (
       <FontAwesomeIcon
         size="3x"
@@ -85,9 +80,9 @@ const Status: FC<RouteComponentProps & PathPrefixProps> = ({ pathPrefix = '' }) 
       />
     );
   }
-  return data ? (
+  return (
     <>
-      {data.map((statuses, i) => {
+      {[runtimeRes.data, buildRes.data, alertmanagersRes.data].map((statuses, i) => {
         return (
           <Fragment key={i}>
             <h2>{sectionTitles[i]}</h2>
@@ -116,7 +111,7 @@ const Status: FC<RouteComponentProps & PathPrefixProps> = ({ pathPrefix = '' }) 
         );
       })}
     </>
-  ) : null;
+  );
 };
 
 export default Status;
