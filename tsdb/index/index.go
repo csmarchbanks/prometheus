@@ -28,6 +28,7 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/pkg/errors"
 
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -1051,6 +1052,7 @@ type Reader struct {
 	symbols     *Symbols
 	nameSymbols map[uint32]string // Cache of the label name symbol lookups,
 	// as there are not many and they are half of all lookups.
+	valueSymbols *simplelru.LRU
 
 	dec *Decoder
 
@@ -1106,10 +1108,15 @@ func NewFileReader(path string) (*Reader, error) {
 }
 
 func newReader(b ByteSlice, c io.Closer) (*Reader, error) {
+	lru, err := simplelru.NewLRU(1024, nil)
+	if err != nil {
+		return nil, err
+	}
 	r := &Reader{
-		b:        b,
-		c:        c,
-		postings: map[string][]postingOffset{},
+		b:            b,
+		c:            c,
+		postings:     map[string][]postingOffset{},
+		valueSymbols: lru,
 	}
 
 	// Verify header.
@@ -1125,7 +1132,6 @@ func newReader(b ByteSlice, c io.Closer) (*Reader, error) {
 		return nil, errors.Errorf("unknown index file version %d", r.version)
 	}
 
-	var err error
 	r.toc, err = NewTOCFromByteSlice(b)
 	if err != nil {
 		return nil, errors.Wrap(err, "read TOC")
@@ -1427,7 +1433,16 @@ func (r *Reader) lookupSymbol(o uint32) (string, error) {
 	if s, ok := r.nameSymbols[o]; ok {
 		return s, nil
 	}
-	return r.symbols.Lookup(o)
+
+	if sym, ok := r.valueSymbols.Get(o); ok {
+		return sym.(string), nil
+	}
+	sym, err := r.symbols.Lookup(o)
+	if err != nil {
+		return sym, err
+	}
+	r.valueSymbols.Add(o, sym)
+	return sym, nil
 }
 
 // Symbols returns an iterator over the symbols that exist within the index.

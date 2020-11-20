@@ -34,7 +34,7 @@ require (
 	github.com/hashicorp/consul/api v1.7.0
 	github.com/hashicorp/go-hclog v0.12.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.2.0 // indirect
-	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hetznercloud/hcloud-go v1.23.1
 	github.com/influxdata/influxdb v1.8.3
 	github.com/json-iterator/go v1.1.10
